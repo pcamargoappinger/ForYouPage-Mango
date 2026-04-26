@@ -365,27 +365,29 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script>
 const BASE = 'https://api.jsonbin.io/v3';
+const PUBLIC_BIN_ID = '69ee0f4236566621a8f2c03d';
 let cfg = {
   title: 'Klassen-Feed',
   subtitle: 'Aktuelle Beiträge aus dem Unterricht',
   password: null,
   apiKey: null,
-  binId: null,
+  binId: PUBLIC_BIN_ID,
   loggedIn: false
 };
 
 function loadCfg() {
-  try { const s = localStorage.getItem('kf_cfg23'); if (s) Object.assign(cfg, JSON.parse(s)); } catch(e){}
+  try { const s = localStorage.getItem('kf_cfg_feed2'); if (s) Object.assign(cfg, JSON.parse(s)); } catch(e){}
+  cfg.binId = PUBLIC_BIN_ID;
 }
 function saveCfg() {
-  const s = Object.assign({}, cfg, { loggedIn: false });
-  localStorage.setItem('kf_cfg23', JSON.stringify(s));
+  const s = Object.assign({}, cfg, { loggedIn: false, binId: PUBLIC_BIN_ID });
+  localStorage.setItem('kf_cfg_feed2', JSON.stringify(s));
 }
 
 async function binGet() {
-  const r = await fetch(`${BASE}/b/${cfg.binId}/latest`, {
-    headers: { 'X-Master-Key': cfg.apiKey, 'X-Bin-Meta': 'false' }
-  });
+  const headers = { 'X-Bin-Meta': 'false' };
+  if (cfg.apiKey) headers['X-Master-Key'] = cfg.apiKey;
+  const r = await fetch(`${BASE}/b/${PUBLIC_BIN_ID}/latest`, { headers });
   if (!r.ok) throw new Error('Fetch failed ' + r.status);
   return r.json();
 }
@@ -414,10 +416,10 @@ async function createBin(apiKey) {
 }
 
 loadCfg();
-if (!cfg.binId || !cfg.apiKey || !cfg.password) {
+updateNav();
+if (!cfg.password) {
   showPage('setup');
 } else {
-  updateNav();
   showPage('feed');
 }
 
@@ -590,7 +592,7 @@ async function saveSettings() {
 }
 function resetAll() {
   if (!confirm('Wirklich alles zurücksetzen? API-Key und alle Einstellungen werden gelöscht.')) return;
-  localStorage.removeItem('kf_cfg23'); location.reload();
+  localStorage.removeItem('kf_cfg_feed2'); location.reload();
 }
 
 let qrDone = false;
