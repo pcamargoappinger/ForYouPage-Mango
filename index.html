@@ -108,6 +108,21 @@
   input:focus, textarea:focus, select:focus { border-color: var(--accent); }
   textarea { resize: vertical; min-height: 100px; }
   .img-preview { margin-top: 0.75rem; max-width: 100%; max-height: 200px; border-radius: 8px; display: none; }
+  .upload-area {
+    border: 2px dashed var(--border); border-radius: 10px; padding: 1.2rem;
+    text-align: center; cursor: pointer; transition: all 0.2s; background: var(--bg);
+    position: relative;
+  }
+  .upload-area:hover, .upload-area.dragover { border-color: var(--accent); background: var(--accent-light); }
+  .upload-area input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+  .upload-icon { font-size: 1.8rem; margin-bottom: 0.3rem; }
+  .upload-label { font-size: 13px; color: var(--muted); }
+  .upload-label strong { color: var(--accent-dark); }
+  .upload-progress {
+    margin-top: 0.6rem; height: 4px; background: var(--border); border-radius: 4px; display: none; overflow: hidden;
+  }
+  .upload-progress-bar { height: 100%; background: var(--accent); width: 0%; transition: width 0.3s; border-radius: 4px; }
+  .upload-status { font-size: 12px; color: var(--muted); margin-top: 0.4rem; display: none; }
   .form-row { display: flex; gap: 10px; }
   .form-row > * { flex: 1; }
 
@@ -307,8 +322,15 @@
         <textarea id="postText" placeholder="Was möchtest du mitteilen?"></textarea>
       </div>
       <div class="form-group">
-        <label>Bild (optional – empfohlen: unter 500 KB)</label>
-        <input type="file" id="postImg" accept="image/*" onchange="previewImage(this)">
+        <label>Bild (optional)</label>
+        <div class="upload-area" id="uploadArea">
+          <input type="file" id="postImg" accept="image/*" onchange="handleImageUpload(this)">
+          <div class="upload-icon">🖼️</div>
+          <div class="upload-label"><strong>Bild auswählen</strong> oder hierher ziehen</div>
+          <div class="upload-label" style="margin-top:3px; font-size:12px">JPG, PNG, GIF – max. 10 MB</div>
+        </div>
+        <div class="upload-progress" id="uploadProgress"><div class="upload-progress-bar" id="uploadProgressBar"></div></div>
+        <div class="upload-status" id="uploadStatus"></div>
         <img id="imgPreview" class="img-preview">
       </div>
       <div class="form-group">
@@ -353,11 +375,11 @@ let cfg = {
 };
 
 function loadCfg() {
-  try { const s = localStorage.getItem('kf_cfg3'); if (s) Object.assign(cfg, JSON.parse(s)); } catch(e){}
+  try { const s = localStorage.getItem('kf_cfg23'); if (s) Object.assign(cfg, JSON.parse(s)); } catch(e){}
 }
 function saveCfg() {
   const s = Object.assign({}, cfg, { loggedIn: false });
-  localStorage.setItem('kf_cfg3', JSON.stringify(s));
+  localStorage.setItem('kf_cfg23', JSON.stringify(s));
 }
 
 async function binGet() {
@@ -462,40 +484,89 @@ async function deletePost(id) {
   } catch(e) { toast('Fehler beim Löschen'); }
 }
 
+// Cloudinary-Konfiguration
+const CLOUDINARY_CLOUD = 'dautxiuqg';
+const CLOUDINARY_PRESET = 'Ananas Feed';
+let uploadedImageUrl = null;
+
+async function handleImageUpload(input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  // Lokale Vorschau
+  const preview = document.getElementById('imgPreview');
+  preview.src = URL.createObjectURL(file);
+  preview.style.display = 'block';
+
+  // Upload-UI anzeigen
+  const progress = document.getElementById('uploadProgress');
+  const bar = document.getElementById('uploadProgressBar');
+  const status = document.getElementById('uploadStatus');
+  progress.style.display = 'block';
+  status.style.display = 'block';
+  status.textContent = 'Bild wird hochgeladen…';
+  bar.style.width = '20%';
+  uploadedImageUrl = null;
+
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', CLOUDINARY_PRESET);
+
+    bar.style.width = '50%';
+    const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/image/upload`, {
+      method: 'POST',
+      body: formData
+    });
+    bar.style.width = '90%';
+    if (!res.ok) throw new Error('Upload fehlgeschlagen');
+    const data = await res.json();
+    uploadedImageUrl = data.secure_url;
+    bar.style.width = '100%';
+    status.textContent = '✓ Bild hochgeladen';
+    status.style.color = 'var(--accent-dark)';
+  } catch(e) {
+    status.textContent = '✗ Upload fehlgeschlagen – bitte nochmal versuchen';
+    status.style.color = '#a32d2d';
+    bar.style.width = '0%';
+    preview.style.display = 'none';
+    uploadedImageUrl = null;
+  }
+}
+
 async function createPost() {
   const text = document.getElementById('postText').value.trim();
   const title = document.getElementById('postTitle').value.trim();
   const author = document.getElementById('postAuthor').value.trim();
   const tag = document.getElementById('postTag').value;
-  const imgEl = document.getElementById('imgPreview');
-  const image = imgEl.style.display !== 'none' && imgEl.src && imgEl.src !== window.location.href ? imgEl.src : null;
-  if (!text && !title && !image) { toast('Bitte Text oder Bild hinzufügen.'); return; }
+  const image = uploadedImageUrl || null;
+  if (!text && !title && !image) { toast('Bitte Text, Titel oder Bild hinzufügen.'); return; }
+
+  const fileInput = document.getElementById('postImg');
+  if (fileInput.files[0] && !uploadedImageUrl) {
+    toast('Bild wird noch hochgeladen – bitte kurz warten.'); return;
+  }
+
   const btn = document.getElementById('publishBtn');
   btn.disabled = true; btn.textContent = 'Wird gespeichert…';
   try {
     const data = await binGet();
     data.posts.push({ id: Date.now().toString(), date: new Date().toISOString(), title, text, author, tag, image });
     await binPut(data);
+    // Felder leeren
     document.getElementById('postText').value = '';
     document.getElementById('postTitle').value = '';
     document.getElementById('postAuthor').value = '';
     document.getElementById('postTag').value = '';
-    imgEl.style.display = 'none';
     document.getElementById('postImg').value = '';
+    document.getElementById('imgPreview').style.display = 'none';
+    document.getElementById('uploadProgress').style.display = 'none';
+    document.getElementById('uploadStatus').style.display = 'none';
+    document.getElementById('uploadProgressBar').style.width = '0%';
+    uploadedImageUrl = null;
     toast('Beitrag veröffentlicht ✓');
   } catch(e) { toast('Fehler: ' + e.message); }
   finally { btn.disabled = false; btn.textContent = 'Beitrag veröffentlichen'; }
-}
-
-function previewImage(input) {
-  const file = input.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = e => {
-    const img = document.getElementById('imgPreview');
-    img.src = e.target.result; img.style.display = 'block';
-  };
-  reader.readAsDataURL(file);
 }
 
 function renderAdminSettings() {
@@ -519,7 +590,7 @@ async function saveSettings() {
 }
 function resetAll() {
   if (!confirm('Wirklich alles zurücksetzen? API-Key und alle Einstellungen werden gelöscht.')) return;
-  localStorage.removeItem('kf_cfg3'); location.reload();
+  localStorage.removeItem('kf_cfg23'); location.reload();
 }
 
 let qrDone = false;
