@@ -353,11 +353,11 @@ let cfg = {
 };
 
 function loadCfg() {
-  try { const s = localStorage.getItem('kf_cfg2'); if (s) Object.assign(cfg, JSON.parse(s)); } catch(e){}
+  try { const s = localStorage.getItem('kf_cfg3'); if (s) Object.assign(cfg, JSON.parse(s)); } catch(e){}
 }
 function saveCfg() {
   const s = Object.assign({}, cfg, { loggedIn: false });
-  localStorage.setItem('kf_cfg2', JSON.stringify(s));
+  localStorage.setItem('kf_cfg3', JSON.stringify(s));
 }
 
 async function binGet() {
@@ -519,7 +519,7 @@ async function saveSettings() {
 }
 function resetAll() {
   if (!confirm('Wirklich alles zurücksetzen? API-Key und alle Einstellungen werden gelöscht.')) return;
-  localStorage.removeItem('kf_cfg2'); location.reload();
+  localStorage.removeItem('kf_cfg3'); location.reload();
 }
 
 let qrDone = false;
