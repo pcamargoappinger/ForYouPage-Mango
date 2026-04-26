@@ -379,7 +379,7 @@ function loadCfg() {
   try { const s = localStorage.getItem('kf_cfg_feed2'); if (s) Object.assign(cfg, JSON.parse(s)); } catch(e){}
   cfg.binId = PUBLIC_BIN_ID;
   cfg.password = 'Mittagessen';
-  cfg.title = 'Mango Feed';
+  cfg.title = 'mango_feed';
   cfg.subtitle = 'Aktuelle Beiträge';
 }
 function saveCfg() {
